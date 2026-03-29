@@ -15,39 +15,19 @@ function setup(){
   CANVAS_W=document.body.clientWidth||window.innerWidth;
   CANVAS_H=document.body.clientHeight||window.innerHeight;
   let cnv=createCanvas(CANVAS_W,CANVAS_H);
+  // pointer-events:none — canvas nunca intercepta nenhum evento
   cnv.elt.style.cssText='display:block;position:absolute;top:0;left:0;pointer-events:none;';
 
-  // Impede seleção de texto ao arrastar no mobile
-  document.body.style.userSelect='none';
-  document.body.style.webkitUserSelect='none';
-
-  // Mouse (desktop)
+  // Desktop: mousemove no document (nunca bloqueia nada)
   document.addEventListener('mousemove',function(e){
-    setAttractorFromClient(e.clientX, e.clientY);
+    setAttractor(e.clientX, e.clientY);
   });
 
-  // Touch — usa offsetX/Y calculado manualmente para evitar
-  // o bug de coordenadas erradas com getBoundingClientRect em iframes
-  document.addEventListener('touchstart',function(e){
-    // preventDefault aqui evita seleção de texto e o delay de 300ms
-    // Só chama se não for no painel de UI
-    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
-      e.preventDefault();
-    }
-    let t=e.touches[0];
-    setAttractorFromClient(t.clientX, t.clientY);
-  },{passive:false});
-
+  // Mobile: touchmove passive:true — NUNCA chama preventDefault
+  // O scroll do site pai funciona normalmente
+  // O atrator segue o dedo enquanto arrasta
   document.addEventListener('touchmove',function(e){
-    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
-      e.preventDefault();
-    }
-    let t=e.touches[0];
-    setAttractorFromClient(t.clientX, t.clientY);
-  },{passive:false});
-
-  document.addEventListener('touchend',function(e){
-    // Deixa o atrator decair sozinho
+    setAttractor(e.touches[0].clientX, e.touches[0].clientY);
   },{passive:true});
 
   buildUI();
@@ -55,18 +35,14 @@ function setup(){
   new ResizeObserver(function(es){
     for(let e of es){
       let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);
-      if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){
-        CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();
-      }
+      if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();}
     }
   }).observe(document.body);
 }
 
-// Converte coordenadas do cliente para o espaço do canvas
-// Usa scrollX/Y do documento para compensar qualquer offset
-function setAttractorFromClient(cx, cy){
+function setAttractor(cx,cy){
+  // Usa pageX/Y para compensar scroll correto em qualquer contexto
   let r=document.querySelector('canvas').getBoundingClientRect();
-  // No iframe o scroll interno é sempre 0, mas garantimos com window.scroll
   attractor.x=cx-r.left;
   attractor.y=cy-r.top;
   attractor.strength=1.0;
@@ -170,7 +146,7 @@ function hexToRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),
 function buildUI(){
   let style=document.createElement('style');
   style.textContent=`
-    #toggle-btn{position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:200;background:rgba(30,30,30,0.85);color:#eee;border:1px solid #555;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:4px;backdrop-filter:blur(4px);writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;pointer-events:auto;touch-action:auto;}
+    #toggle-btn{position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:200;background:rgba(30,30,30,0.85);color:#eee;border:1px solid #555;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:4px;backdrop-filter:blur(4px);writing-mode:vertical-rl;letter-spacing:2px;pointer-events:auto;touch-action:manipulation;}
     #toggle-btn:hover{background:rgba(60,60,60,0.95);}
     #ui-sidebar{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:199;width:0;max-height:90vh;overflow:hidden;transition:width 0.2s ease;background:rgba(20,20,20,0.92);border-right:1px solid #444;backdrop-filter:blur(8px);border-radius:0 8px 8px 0;pointer-events:auto;touch-action:auto;}
     #ui-sidebar.open{width:270px;}
@@ -189,7 +165,6 @@ function buildUI(){
 
   let sidebar=document.createElement('div');sidebar.id='ui-sidebar';document.body.appendChild(sidebar);
   panel=document.createElement('div');panel.id='ui-panel';sidebar.appendChild(panel);
-
   let btn=document.createElement('button');btn.id='toggle-btn';btn.textContent='☰ PARAMS';
   btn.onclick=()=>sidebar.classList.toggle('open');
   document.body.appendChild(btn);
@@ -217,7 +192,6 @@ function buildUI(){
     let inp=document.createElement('input');inp.type='checkbox';inp.checked=get();
     inp.onchange=()=>set(inp.checked);div.appendChild(lbl);div.appendChild(inp);panel.appendChild(div);
   }
-
   sec('Flow Field');
   slider('field scale',()=>FIELD_SCALE,v=>FIELD_SCALE=v,0.0001,0.008,0.0001);
   slider('field angle',()=>FIELD_ANGLE,v=>FIELD_ANGLE=v,0.1,9.0,0.01);
@@ -299,4 +273,4 @@ function buildUI(){
   let row=document.createElement('div');row.className='btn-row';
   let rb=document.createElement('button');rb.textContent='⟳  REINICIAR';rb.onclick=init;
   row.appendChild(rb);panel.appendChild(row);
-               }
+    }
