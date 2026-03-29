@@ -1,4 +1,4 @@
-// FIDENZA EMBED — hover + painel de parâmetros (sem fullscreen)
+// FIDENZA EMBED — hover/touch + painel de parâmetros
 let CANVAS_W=800,CANVAS_H=800,FIELD_SCALE=0.0018,FIELD_ANGLE=3.14159,FIELD_EVOLUTION=0.0003;
 let REPULSION_RADIUS=30,REPULSION_STRENGTH=0.8,NUM_PARTICLES=800,TRAIL_LENGTH=10;
 let MIN_WIDTH=4,MAX_WIDTH=18,SPEED=4.0,WRAP_EDGES=true;
@@ -16,19 +16,61 @@ function setup(){
   CANVAS_H=document.body.clientHeight||window.innerHeight;
   let cnv=createCanvas(CANVAS_W,CANVAS_H);
   cnv.elt.style.cssText='display:block;position:absolute;top:0;left:0;pointer-events:none;';
+
+  // Impede seleção de texto ao arrastar no mobile
+  document.body.style.userSelect='none';
+  document.body.style.webkitUserSelect='none';
+
+  // Mouse (desktop)
   document.addEventListener('mousemove',function(e){
-    let r=cnv.elt.getBoundingClientRect();
-    attractor.x=e.clientX-r.left;attractor.y=e.clientY-r.top;
-    attractor.strength=1.0;attractor.active=true;
+    setAttractorFromClient(e.clientX, e.clientY);
   });
+
+  // Touch — usa offsetX/Y calculado manualmente para evitar
+  // o bug de coordenadas erradas com getBoundingClientRect em iframes
+  document.addEventListener('touchstart',function(e){
+    // preventDefault aqui evita seleção de texto e o delay de 300ms
+    // Só chama se não for no painel de UI
+    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
+      e.preventDefault();
+    }
+    let t=e.touches[0];
+    setAttractorFromClient(t.clientX, t.clientY);
+  },{passive:false});
+
   document.addEventListener('touchmove',function(e){
-    let r=cnv.elt.getBoundingClientRect();
-    attractor.x=e.touches[0].clientX-r.left;attractor.y=e.touches[0].clientY-r.top;
-    attractor.strength=1.0;attractor.active=true;
+    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
+      e.preventDefault();
+    }
+    let t=e.touches[0];
+    setAttractorFromClient(t.clientX, t.clientY);
+  },{passive:false});
+
+  document.addEventListener('touchend',function(e){
+    // Deixa o atrator decair sozinho
   },{passive:true});
+
   buildUI();
   init();
-  new ResizeObserver(function(es){for(let e of es){let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();}}}).observe(document.body);
+  new ResizeObserver(function(es){
+    for(let e of es){
+      let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);
+      if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){
+        CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();
+      }
+    }
+  }).observe(document.body);
+}
+
+// Converte coordenadas do cliente para o espaço do canvas
+// Usa scrollX/Y do documento para compensar qualquer offset
+function setAttractorFromClient(cx, cy){
+  let r=document.querySelector('canvas').getBoundingClientRect();
+  // No iframe o scroll interno é sempre 0, mas garantimos com window.scroll
+  attractor.x=cx-r.left;
+  attractor.y=cy-r.top;
+  attractor.strength=1.0;
+  attractor.active=true;
 }
 
 function draw(){
@@ -47,7 +89,11 @@ function init(){
 
 function buildSpatialGrid(){
   spatialGrid.cell=max(1,REPULSION_RADIUS);spatialGrid.cells={};
-  for(let p of particles){let cx=floor(p.x/spatialGrid.cell),cy=floor(p.y/spatialGrid.cell),k=cx+','+cy;if(!spatialGrid.cells[k])spatialGrid.cells[k]=[];spatialGrid.cells[k].push(p);}
+  for(let p of particles){
+    let cx=floor(p.x/spatialGrid.cell),cy=floor(p.y/spatialGrid.cell),k=cx+','+cy;
+    if(!spatialGrid.cells[k])spatialGrid.cells[k]=[];
+    spatialGrid.cells[k].push(p);
+  }
 }
 
 function fieldAngle(x,y){return noise(x*FIELD_SCALE,y*FIELD_SCALE,frameCount*FIELD_EVOLUTION)*FIELD_ANGLE;}
@@ -63,9 +109,11 @@ class Particle{
       let dx=attractor.x-this.x,dy=attractor.y-this.y,d=sqrt(dx*dx+dy*dy);
       if(d<ATTRACTOR_RADIUS){
         let inf=(1-d/ATTRACTOR_RADIUS)*attractor.strength;
-        if(d>0.1){let rf=(d-ORBIT_DISTANCE)/ATTRACTOR_RADIUS,nx=dx/d,ny=dy/d,tx=-ny,ty=nx;
+        if(d>0.1){
+          let rf=(d-ORBIT_DISTANCE)/ATTRACTOR_RADIUS,nx=dx/d,ny=dy/d,tx=-ny,ty=nx;
           let ax=(nx*rf+tx*0.8)*inf*ATTRACTOR_STRENGTH,ay=(ny*rf+ty*0.8)*inf*ATTRACTOR_STRENGTH;
-          fx=lerp(fx,ax,inf);fy=lerp(fy,ay,inf);}
+          fx=lerp(fx,ax,inf);fy=lerp(fy,ay,inf);
+        }
       }
     }
     if(REPULSION_STRENGTH>0){
@@ -122,28 +170,11 @@ function hexToRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),
 function buildUI(){
   let style=document.createElement('style');
   style.textContent=`
-    #toggle-btn {
-      position:fixed; left:10px; top:50%; transform:translateY(-50%);
-      z-index:200; background:rgba(30,30,30,0.85); color:#eee;
-      border:1px solid #555; padding:6px 12px; cursor:pointer;
-      font-family:monospace; font-size:12px; border-radius:4px;
-      backdrop-filter:blur(4px); writing-mode:vertical-rl;
-      text-orientation:mixed; letter-spacing:2px;
-    }
+    #toggle-btn{position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:200;background:rgba(30,30,30,0.85);color:#eee;border:1px solid #555;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:4px;backdrop-filter:blur(4px);writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;pointer-events:auto;touch-action:auto;}
     #toggle-btn:hover{background:rgba(60,60,60,0.95);}
-    #ui-sidebar {
-      position:fixed; left:0; top:50%; transform:translateY(-50%);
-      z-index:199; width:0; max-height:90vh; overflow:hidden;
-      transition:width 0.2s ease; background:rgba(20,20,20,0.92);
-      border-right:1px solid #444; backdrop-filter:blur(8px);
-      border-radius:0 8px 8px 0;
-    }
+    #ui-sidebar{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:199;width:0;max-height:90vh;overflow:hidden;transition:width 0.2s ease;background:rgba(20,20,20,0.92);border-right:1px solid #444;backdrop-filter:blur(8px);border-radius:0 8px 8px 0;pointer-events:auto;touch-action:auto;}
     #ui-sidebar.open{width:270px;}
-    #ui-panel {
-      display:flex; flex-direction:column; gap:6px;
-      padding:16px 12px 16px 12px; min-width:260px;
-      max-height:90vh; overflow-y:auto;
-    }
+    #ui-panel{display:flex;flex-direction:column;gap:6px;padding:16px 12px;min-width:260px;max-height:90vh;overflow-y:auto;}
     .sec{color:#aaa;font-size:10px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid #444;padding-bottom:3px;margin-top:6px;}
     .ctrl{display:flex;flex-direction:column;gap:2px;}
     .ctrl label{color:#ccc;font-size:11px;display:flex;justify-content:space-between;}
@@ -156,28 +187,23 @@ function buildUI(){
   `;
   document.head.appendChild(style);
 
-  let sidebar=document.createElement('div'); sidebar.id='ui-sidebar';
-  document.body.appendChild(sidebar);
-  panel=document.createElement('div'); panel.id='ui-panel';
-  sidebar.appendChild(panel);
+  let sidebar=document.createElement('div');sidebar.id='ui-sidebar';document.body.appendChild(sidebar);
+  panel=document.createElement('div');panel.id='ui-panel';sidebar.appendChild(panel);
 
-  let btn=document.createElement('button'); btn.id='toggle-btn';
-  btn.textContent='☰ PARAMS';
-  btn.onclick=()=>{sidebar.classList.toggle('open');};
+  let btn=document.createElement('button');btn.id='toggle-btn';btn.textContent='☰ PARAMS';
+  btn.onclick=()=>sidebar.classList.toggle('open');
   document.body.appendChild(btn);
 
   function sec(t){let d=document.createElement('div');d.className='sec';d.textContent=t;panel.appendChild(d);}
   function sliderRef(label,get,set,mn,mx,step){
     let div=document.createElement('div');div.className='ctrl';
     let lbl=document.createElement('label'),txt=document.createTextNode(label+' '),val=document.createElement('span');
-    val.textContent=get().toFixed(step<0.01?4:step<1?2:0);
-    lbl.appendChild(txt);lbl.appendChild(val);
+    val.textContent=get().toFixed(step<0.01?4:step<1?2:0);lbl.appendChild(txt);lbl.appendChild(val);
     let inp=document.createElement('input');inp.type='range';inp.min=mn;inp.max=mx;inp.step=step;inp.value=get();
     inp.oninput=()=>{let v=parseFloat(inp.value);set(v);val.textContent=v.toFixed(step<0.01?4:step<1?2:0);};
-    div.appendChild(lbl);div.appendChild(inp);panel.appendChild(div);
-    return{inp,val};
+    div.appendChild(lbl);div.appendChild(inp);panel.appendChild(div);return{inp,val};
   }
-  function slider(label,get,set,mn,mx,step){sliderRef(label,get,set,mn,mx,step);}
+  function slider(l,g,s,mn,mx,st){sliderRef(l,g,s,mn,mx,st);}
   function sel(label,opts,get,set){
     let div=document.createElement('div');div.className='ctrl';
     let lbl=document.createElement('label');lbl.textContent=label;
@@ -259,7 +285,7 @@ function buildUI(){
         if(os<0.001)return;PALETTE[i][3]=nv;
         PALETTE.forEach((cc,j)=>{if(j===i)return;cc[3]=Math.max(0,cc[3]-delta*(cc[3]/os));});
         let t=PALETTE.reduce((s,cc)=>s+cc[3],0);PALETTE.forEach(cc=>cc[3]=cc[3]/t);
-        colorEditorEl.querySelectorAll('input[type=range]').forEach((inp,j)=>{if(j!==i){inp.value=PALETTE[j][3];}});
+        colorEditorEl.querySelectorAll('input[type=range]').forEach((inp,j)=>{if(j!==i)inp.value=PALETTE[j][3];});
         colorEditorEl.querySelectorAll('span').forEach((sp,j)=>{sp.textContent=PALETTE[j][3].toFixed(2);});
         probVal.textContent=PALETTE[i][3].toFixed(2);probInp.value=PALETTE[i][3];
       };
@@ -273,4 +299,4 @@ function buildUI(){
   let row=document.createElement('div');row.className='btn-row';
   let rb=document.createElement('button');rb.textContent='⟳  REINICIAR';rb.onclick=init;
   row.appendChild(rb);panel.appendChild(row);
-    }
+               }
