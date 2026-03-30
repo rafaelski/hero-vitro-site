@@ -1,4 +1,4 @@
-// FIDENZA EMBED — hover/touch + painel de parâmetros
+// FIDENZA EMBED — hover + painel de parâmetros
 let CANVAS_W=800,CANVAS_H=800,FIELD_SCALE=0.0018,FIELD_ANGLE=3.14159,FIELD_EVOLUTION=0.0003;
 let REPULSION_RADIUS=30,REPULSION_STRENGTH=0.8,NUM_PARTICLES=800,TRAIL_LENGTH=10;
 let MIN_WIDTH=4,MAX_WIDTH=18,SPEED=4.0,WRAP_EDGES=true;
@@ -16,61 +16,14 @@ function setup(){
   CANVAS_H=document.body.clientHeight||window.innerHeight;
   let cnv=createCanvas(CANVAS_W,CANVAS_H);
   cnv.elt.style.cssText='display:block;position:absolute;top:0;left:0;pointer-events:none;';
-
-  // Impede seleção de texto ao arrastar no mobile
-  document.body.style.userSelect='none';
-  document.body.style.webkitUserSelect='none';
-
-  // Mouse (desktop)
   document.addEventListener('mousemove',function(e){
-    setAttractorFromClient(e.clientX, e.clientY);
+    let r=cnv.elt.getBoundingClientRect();
+    attractor.x=e.clientX-r.left;attractor.y=e.clientY-r.top;
+    attractor.strength=1.0;attractor.active=true;
   });
-
-  // Touch — usa offsetX/Y calculado manualmente para evitar
-  // o bug de coordenadas erradas com getBoundingClientRect em iframes
-  document.addEventListener('touchstart',function(e){
-    // preventDefault aqui evita seleção de texto e o delay de 300ms
-    // Só chama se não for no painel de UI
-    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
-      e.preventDefault();
-    }
-    let t=e.touches[0];
-    setAttractorFromClient(t.clientX, t.clientY);
-  },{passive:false});
-
-  document.addEventListener('touchmove',function(e){
-    if(!e.target.closest('#ui-sidebar') && !e.target.closest('#toggle-btn')){
-      e.preventDefault();
-    }
-    let t=e.touches[0];
-    setAttractorFromClient(t.clientX, t.clientY);
-  },{passive:false});
-
-  document.addEventListener('touchend',function(e){
-    // Deixa o atrator decair sozinho
-  },{passive:true});
-
   buildUI();
   init();
-  new ResizeObserver(function(es){
-    for(let e of es){
-      let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);
-      if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){
-        CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();
-      }
-    }
-  }).observe(document.body);
-}
-
-// Converte coordenadas do cliente para o espaço do canvas
-// Usa scrollX/Y do documento para compensar qualquer offset
-function setAttractorFromClient(cx, cy){
-  let r=document.querySelector('canvas').getBoundingClientRect();
-  // No iframe o scroll interno é sempre 0, mas garantimos com window.scroll
-  attractor.x=cx-r.left;
-  attractor.y=cy-r.top;
-  attractor.strength=1.0;
-  attractor.active=true;
+  new ResizeObserver(function(es){for(let e of es){let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();}}}).observe(document.body);
 }
 
 function draw(){
@@ -89,11 +42,7 @@ function init(){
 
 function buildSpatialGrid(){
   spatialGrid.cell=max(1,REPULSION_RADIUS);spatialGrid.cells={};
-  for(let p of particles){
-    let cx=floor(p.x/spatialGrid.cell),cy=floor(p.y/spatialGrid.cell),k=cx+','+cy;
-    if(!spatialGrid.cells[k])spatialGrid.cells[k]=[];
-    spatialGrid.cells[k].push(p);
-  }
+  for(let p of particles){let cx=floor(p.x/spatialGrid.cell),cy=floor(p.y/spatialGrid.cell),k=cx+','+cy;if(!spatialGrid.cells[k])spatialGrid.cells[k]=[];spatialGrid.cells[k].push(p);}
 }
 
 function fieldAngle(x,y){return noise(x*FIELD_SCALE,y*FIELD_SCALE,frameCount*FIELD_EVOLUTION)*FIELD_ANGLE;}
@@ -107,13 +56,10 @@ class Particle{
     let fa=fieldAngle(this.x,this.y),fx=cos(fa),fy=sin(fa);
     if(attractor.active&&attractor.strength>0){
       let dx=attractor.x-this.x,dy=attractor.y-this.y,d=sqrt(dx*dx+dy*dy);
-      if(d<ATTRACTOR_RADIUS){
-        let inf=(1-d/ATTRACTOR_RADIUS)*attractor.strength;
-        if(d>0.1){
-          let rf=(d-ORBIT_DISTANCE)/ATTRACTOR_RADIUS,nx=dx/d,ny=dy/d,tx=-ny,ty=nx;
+      if(d<ATTRACTOR_RADIUS){let inf=(1-d/ATTRACTOR_RADIUS)*attractor.strength;
+        if(d>0.1){let rf=(d-ORBIT_DISTANCE)/ATTRACTOR_RADIUS,nx=dx/d,ny=dy/d,tx=-ny,ty=nx;
           let ax=(nx*rf+tx*0.8)*inf*ATTRACTOR_STRENGTH,ay=(ny*rf+ty*0.8)*inf*ATTRACTOR_STRENGTH;
-          fx=lerp(fx,ax,inf);fy=lerp(fy,ay,inf);
-        }
+          fx=lerp(fx,ax,inf);fy=lerp(fy,ay,inf);}
       }
     }
     if(REPULSION_STRENGTH>0){
@@ -170,7 +116,7 @@ function hexToRgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),
 function buildUI(){
   let style=document.createElement('style');
   style.textContent=`
-    #toggle-btn{position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:200;background:rgba(30,30,30,0.85);color:#eee;border:1px solid #555;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:4px;backdrop-filter:blur(4px);writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;pointer-events:auto;touch-action:auto;}
+    #toggle-btn{position:fixed;left:10px;top:50%;transform:translateY(-50%);z-index:200;background:rgba(30,30,30,0.85);color:#eee;border:1px solid #555;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;border-radius:4px;backdrop-filter:blur(4px);writing-mode:vertical-rl;letter-spacing:2px;pointer-events:auto;touch-action:manipulation;}
     #toggle-btn:hover{background:rgba(60,60,60,0.95);}
     #ui-sidebar{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:199;width:0;max-height:90vh;overflow:hidden;transition:width 0.2s ease;background:rgba(20,20,20,0.92);border-right:1px solid #444;backdrop-filter:blur(8px);border-radius:0 8px 8px 0;pointer-events:auto;touch-action:auto;}
     #ui-sidebar.open{width:270px;}
@@ -186,14 +132,11 @@ function buildUI(){
     .btn-row button:hover{background:#f0a040;color:#111;}
   `;
   document.head.appendChild(style);
-
   let sidebar=document.createElement('div');sidebar.id='ui-sidebar';document.body.appendChild(sidebar);
   panel=document.createElement('div');panel.id='ui-panel';sidebar.appendChild(panel);
-
   let btn=document.createElement('button');btn.id='toggle-btn';btn.textContent='☰ PARAMS';
   btn.onclick=()=>sidebar.classList.toggle('open');
   document.body.appendChild(btn);
-
   function sec(t){let d=document.createElement('div');d.className='sec';d.textContent=t;panel.appendChild(d);}
   function sliderRef(label,get,set,mn,mx,step){
     let div=document.createElement('div');div.className='ctrl';
@@ -205,19 +148,16 @@ function buildUI(){
   }
   function slider(l,g,s,mn,mx,st){sliderRef(l,g,s,mn,mx,st);}
   function sel(label,opts,get,set){
-    let div=document.createElement('div');div.className='ctrl';
-    let lbl=document.createElement('label');lbl.textContent=label;
+    let div=document.createElement('div');div.className='ctrl';let lbl=document.createElement('label');lbl.textContent=label;
     let s=document.createElement('select');
     opts.forEach(o=>{let op=document.createElement('option');op.value=o;op.textContent=o;if(o===get())op.selected=true;s.appendChild(op);});
     s.onchange=()=>set(s.value);div.appendChild(lbl);div.appendChild(s);panel.appendChild(div);
   }
   function chk(label,get,set){
-    let div=document.createElement('div');div.className='ctrl';
-    let lbl=document.createElement('label');lbl.textContent=label;
+    let div=document.createElement('div');div.className='ctrl';let lbl=document.createElement('label');lbl.textContent=label;
     let inp=document.createElement('input');inp.type='checkbox';inp.checked=get();
     inp.onchange=()=>set(inp.checked);div.appendChild(lbl);div.appendChild(inp);panel.appendChild(div);
   }
-
   sec('Flow Field');
   slider('field scale',()=>FIELD_SCALE,v=>FIELD_SCALE=v,0.0001,0.008,0.0001);
   slider('field angle',()=>FIELD_ANGLE,v=>FIELD_ANGLE=v,0.1,9.0,0.01);
@@ -246,8 +186,7 @@ function buildUI(){
   sec('Cores');
   let satRef,lightRef;
   {
-    let div=document.createElement('div');div.className='ctrl';
-    let lbl=document.createElement('label');lbl.textContent='paleta preset';
+    let div=document.createElement('div');div.className='ctrl';let lbl=document.createElement('label');lbl.textContent='paleta preset';
     let s=document.createElement('select');
     s.style.cssText='background:#333;color:#eee;border:1px solid #555;padding:2px 4px;font-family:monospace;font-size:11px;width:100%;';
     ['— custom —',...Object.keys(PALETTES_PRESET)].forEach(o=>{let op=document.createElement('option');op.value=o;op.textContent=o;s.appendChild(op);});
@@ -257,8 +196,7 @@ function buildUI(){
   satRef=sliderRef('saturação',()=>SAT_MULT,v=>{SAT_MULT=v;if(window._paletteSelect)window._paletteSelect.value='— custom —';},0,2.0,0.05);
   lightRef=sliderRef('brilho',()=>LIGHT_MULT,v=>{LIGHT_MULT=v;if(window._paletteSelect)window._paletteSelect.value='— custom —';},0,2.0,0.05);
   {
-    let div=document.createElement('div');div.className='ctrl';
-    let lbl=document.createElement('label');lbl.textContent='cor do fundo';
+    let div=document.createElement('div');div.className='ctrl';let lbl=document.createElement('label');lbl.textContent='cor do fundo';
     let cp=document.createElement('input');cp.type='color';cp.value=rgbToHex(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2]);
     cp.style.cssText='width:100%;height:24px;border:none;background:none;cursor:pointer;padding:0;';
     cp.oninput=()=>{let rgb=hexToRgb(cp.value);BG_COLOR=[rgb.r,rgb.g,rgb.b];};
@@ -299,4 +237,4 @@ function buildUI(){
   let row=document.createElement('div');row.className='btn-row';
   let rb=document.createElement('button');rb.textContent='⟳  REINICIAR';rb.onclick=init;
   row.appendChild(rb);panel.appendChild(row);
-               }
+      }
