@@ -1,4 +1,4 @@
-// FIDENZA EMBED — hover + painel de parâmetros
+// FIDENZA EMBED — hover + painel de parâmetros + postMessage tema
 let CANVAS_W=800,CANVAS_H=800,FIELD_SCALE=0.0018,FIELD_ANGLE=3.14159,FIELD_EVOLUTION=0.0003;
 let REPULSION_RADIUS=30,REPULSION_STRENGTH=0.8,NUM_PARTICLES=800,TRAIL_LENGTH=10;
 let MIN_WIDTH=4,MAX_WIDTH=18,SPEED=4.0,WRAP_EDGES=true;
@@ -10,6 +10,11 @@ let SAT_MULT=1.0,LIGHT_MULT=1.0,BG_COLOR=[245,240,228],BG_FADE=false,BG_FADE_ALP
 let USE_FIXED_SEED=false,FIXED_SEED=42;
 let attractor={x:0,y:0,strength:0,active:false};
 let particles=[],spatialGrid={cells:{},cell:30},panel;
+
+function emitTheme(){
+  var lum=0.299*BG_COLOR[0]+0.587*BG_COLOR[1]+0.114*BG_COLOR[2];
+  window.parent.postMessage({fidenzaTheme:lum>128?'light':'dark'},'*');
+}
 
 function setup(){
   CANVAS_W=document.body.clientWidth||window.innerWidth;
@@ -23,9 +28,9 @@ function setup(){
   });
   buildUI();
   init();
+  emitTheme();
   new ResizeObserver(function(es){for(let e of es){let nw=Math.floor(e.contentRect.width),nh=Math.floor(e.contentRect.height);if(nw>0&&nh>0&&(nw!==CANVAS_W||nh!==CANVAS_H)){CANVAS_W=nw;CANVAS_H=nh;resizeCanvas(CANVAS_W,CANVAS_H);init();}}}).observe(document.body);
 }
-
 function draw(){
   if(BG_FADE){fill(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2],BG_FADE_ALPHA);noStroke();rect(0,0,width,height);}
   else{background(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2]);}
@@ -33,18 +38,15 @@ function draw(){
   buildSpatialGrid();
   for(let p of particles){p.update();p.draw();}
 }
-
 function init(){
   let s=USE_FIXED_SEED?FIXED_SEED:floor(random(999999));
   randomSeed(s);noiseSeed(s);particles=[];
   for(let i=0;i<NUM_PARTICLES;i++)particles.push(new Particle());
 }
-
 function buildSpatialGrid(){
   spatialGrid.cell=max(1,REPULSION_RADIUS);spatialGrid.cells={};
   for(let p of particles){let cx=floor(p.x/spatialGrid.cell),cy=floor(p.y/spatialGrid.cell),k=cx+','+cy;if(!spatialGrid.cells[k])spatialGrid.cells[k]=[];spatialGrid.cells[k].push(p);}
 }
-
 function fieldAngle(x,y){return noise(x*FIELD_SCALE,y*FIELD_SCALE,frameCount*FIELD_EVOLUTION)*FIELD_ANGLE;}
 function windowResized(){CANVAS_W=document.body.clientWidth||window.innerWidth;CANVAS_H=document.body.clientHeight||window.innerHeight;resizeCanvas(CANVAS_W,CANVAS_H);}
 
@@ -96,7 +98,6 @@ class Particle{
     endShape(CLOSE);
   }
 }
-
 function pickColorFromNorm(norm){
   let total=PALETTE.reduce((s,c)=>s+c[3],0),acc=0;
   for(let c of PALETTE){acc+=c[3]/total;if(norm<=acc)return applyColorMods(c);}
@@ -199,7 +200,7 @@ function buildUI(){
     let div=document.createElement('div');div.className='ctrl';let lbl=document.createElement('label');lbl.textContent='cor do fundo';
     let cp=document.createElement('input');cp.type='color';cp.value=rgbToHex(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2]);
     cp.style.cssText='width:100%;height:24px;border:none;background:none;cursor:pointer;padding:0;';
-    cp.oninput=()=>{let rgb=hexToRgb(cp.value);BG_COLOR=[rgb.r,rgb.g,rgb.b];};
+    cp.oninput=()=>{let rgb=hexToRgb(cp.value);BG_COLOR=[rgb.r,rgb.g,rgb.b];emitTheme();};
     div.appendChild(lbl);div.appendChild(cp);panel.appendChild(div);
   }
   let colorEditorEl=document.createElement('div');colorEditorEl.id='color-editor';panel.appendChild(colorEditorEl);
@@ -237,4 +238,4 @@ function buildUI(){
   let row=document.createElement('div');row.className='btn-row';
   let rb=document.createElement('button');rb.textContent='⟳  REINICIAR';rb.onclick=init;
   row.appendChild(rb);panel.appendChild(row);
-      }
+                   }
